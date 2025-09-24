@@ -141,44 +141,73 @@ const makeAuthenticatedRequest = async (url: string, options: RequestInit = {}) 
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${url}`, {
-    ...options,
-    headers,
-  });
+  // Add timeout to prevent hanging requests
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-  if (response.status === 401) {
-    removeAuthToken();
-    throw new Error('Authentication required');
+  try {
+    const response = await fetch(`${API_BASE_URL}${url}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (response.status === 401) {
+      removeAuthToken();
+      throw new Error('Authentication required');
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('Request timed out. Please check your internet connection and try again.');
+    }
+    throw error;
   }
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-  }
-
-  return response.json();
 };
 
 // API functions
 export const api = {
   // Authentication
   login: async (email: string, password: string): Promise<{ user: User; token: string }> => {
-    const response = await fetch(`${API_BASE_URL}/api/users/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ email, password }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || 'Login failed');
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/users/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Login failed');
+      }
+
+      const data = await response.json();
+      setAuthToken(data.token);
+      return data;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Login request timed out. Please check your internet connection and try again.');
+      }
+      throw error;
     }
-
-    const data = await response.json();
-    setAuthToken(data.token);
-    return data;
   },
 
   adminLogin: async (email: string, password: string): Promise<{ user: User; token: string }> => {
@@ -195,22 +224,36 @@ export const api = {
     role?: string;
     department?: string;
   }): Promise<{ user: User; token: string }> => {
-    const response = await fetch(`${API_BASE_URL}/api/users/register`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(userData),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || 'Registration failed');
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/users/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Registration failed');
+      }
+
+      const data = await response.json();
+      setAuthToken(data.token);
+      return data;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Registration request timed out. Please check your internet connection and try again.');
+      }
+      throw error;
     }
-
-    const data = await response.json();
-    setAuthToken(data.token);
-    return data;
   },
 
   logout: () => {
@@ -245,24 +288,47 @@ export const api = {
     const token = getAuthToken();
     console.log('🌐 API: Auth token present:', !!token);
     
-    const response = await fetch(`${API_BASE_URL}/api/analyze-image`, {
-      method: 'POST',
-      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-      body: formData,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-    console.log('🌐 API: Response status:', response.status);
-    console.log('🌐 API: Response ok:', response.ok);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/analyze-image`, {
+        method: 'POST',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        body: formData,
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('🌐 API: Error response:', errorData);
-      throw new Error(errorData.error || 'Image analysis failed');
+      clearTimeout(timeoutId);
+
+      console.log('🌐 API: Response status:', response.status);
+      console.log('🌐 API: Response ok:', response.ok);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('🌐 API: Error response:', errorData);
+        
+        // Handle specific error cases
+        if (errorData.details && errorData.details.includes('Quota exceeded')) {
+          throw new Error('Image analysis quota exceeded. Please try again later or contact support.');
+        }
+        if (errorData.details && errorData.details.includes('429 Too Many Requests')) {
+          throw new Error('Too many requests. Please wait a moment and try again.');
+        }
+        
+        throw new Error(errorData.error || 'Image analysis failed');
+      }
+
+      const result = await response.json();
+      console.log('🌐 API: Success response:', result);
+      return result;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Image analysis request timed out. Please check your internet connection and try again.');
+      }
+      throw error;
     }
-
-    const result = await response.json();
-    console.log('🌐 API: Success response:', result);
-    return result;
   },
 
   submitProblem: async (problemData: {
@@ -286,18 +352,32 @@ export const api = {
     }
 
     const token = getAuthToken();
-    const response = await fetch(`${API_BASE_URL}/api/problems`, {
-      method: 'POST',
-      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-      body: formData,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || 'Problem submission failed');
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/problems`, {
+        method: 'POST',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        body: formData,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Problem submission failed');
+      }
+
+      return response.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Problem submission request timed out. Please check your internet connection and try again.');
+      }
+      throw error;
     }
-
-    return response.json();
   },
 
   getUserProblems: async (userId: string): Promise<{ problems: Problem[] }> => {
@@ -319,18 +399,32 @@ export const api = {
     }
 
     const token = getAuthToken();
-    const response = await fetch(`${API_BASE_URL}/api/admin/problems/${problemId}/complete`, {
-      method: 'POST',
-      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-      body: formData,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || 'Failed to complete problem');
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/problems/${problemId}/complete`, {
+        method: 'POST',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        body: formData,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to complete problem');
+      }
+
+      return response.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Complete problem request timed out. Please check your internet connection and try again.');
+      }
+      throw error;
     }
-
-    return response.json();
   },
 
   assignWorker: async (problemId: string, assignmentData: {
@@ -482,10 +576,38 @@ export const api = {
     return makeAuthenticatedRequest(`/api/analytics/recent-activity${queryString}`);
   },
 
+
+  // Problem Categories - Not needed since categories come from image analysis
+  getProblemCategories: async (): Promise<{ categories: string[] }> => {
+    // Categories are only available through image analysis, not as a separate endpoint
+    // Return empty array since we'll only show categories from AI analysis
+    return { categories: [] };
+  },
+
   // Health check
   healthCheck: async (): Promise<{ status: string; timestamp: string }> => {
-    const response = await fetch(`${API_BASE_URL}/health`);
-    return response.json();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/health`, {
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Health check request timed out. Please check your internet connection and try again.');
+      }
+      throw error;
+    }
   },
 };
 

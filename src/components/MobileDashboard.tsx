@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -47,6 +47,8 @@ export default function MobileDashboard({ user, onSubmitReport, onViewHistory, o
   });
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [backendCategories, setBackendCategories] = useState<string[]>([]);
+  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
   const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -64,6 +66,11 @@ export default function MobileDashboard({ user, onSubmitReport, onViewHistory, o
   });
   
   const t = getTranslations(language);
+
+  // Categories are only available through image analysis, no need to load them separately
+  useEffect(() => {
+    setIsLoadingCategories(false);
+  }, []);
 
   const categories = [
     t.categories.garbageWaste,
@@ -144,22 +151,59 @@ export default function MobileDashboard({ user, onSubmitReport, onViewHistory, o
                   : `✨ Found ${analysisResult.categories.length} problem categories!`
               );
             } else {
+              // Provide fallback categories when AI doesn't detect any
+              const defaultCategories = [
+                'Garbage & Waste',
+                'Water Issues', 
+                'Traffic & Roads',
+                'Electricity Issues',
+                'Public Spaces',
+                'Other Issues'
+              ];
+              setBackendCategories(defaultCategories);
+              
               toast.info(
                 language === 'hindi' 
-                  ? 'कोई विशिष्ट समस्या श्रेणी नहीं मिली, कृपया समस्या का विवरण लिखें' 
-                  : 'No specific problem categories found, please describe the problem in detail'
+                  ? 'कोई विशिष्ट समस्या श्रेणी नहीं मिली। कुछ सामान्य श्रेणियां दिखाई जा रही हैं, कृपया अपनी समस्या के अनुसार चुनें।' 
+                  : 'No specific problem categories found. Showing some common categories, please select according to your issue.'
               );
             }
           } catch (analysisError) {
             console.error('❌ Mobile - Image analysis failed:', analysisError);
             toast.dismiss('image-analysis');
-            toast.error(
+            
+            // Check if it's a quota exceeded error
+            if (analysisError.message.includes('quota exceeded') || analysisError.message.includes('Too many requests')) {
+              toast.warning(
+                language === 'hindi' 
+                  ? 'तस्वीर विश्लेषण सेवा अस्थायी रूप से अनुपलब्ध है। कृपया समस्या का विवरण मैन्युअल रूप से चुनें।' 
+                  : 'Image analysis service is temporarily unavailable. Please select problem categories manually.'
+              );
+            } else {
+              toast.error(
+                language === 'hindi' 
+                  ? 'तस्वीर विश्लेषण में त्रुटि, कृपया मैन्युअल रूप से श्रेणी चुनें' 
+                  : 'Image analysis failed, please select categories manually'
+              );
+            }
+            
+            // Fallback to default categories when image analysis fails
+            const defaultCategories = [
+              'Garbage & Waste',
+              'Water Issues', 
+              'Traffic & Roads',
+              'Electricity Issues',
+              'Public Spaces',
+              'Other Issues'
+            ];
+            setBackendCategories(defaultCategories);
+            
+            // Show info message about fallback
+            toast.info(
               language === 'hindi' 
-                ? 'तस्वीर विश्लेषण में त्रुटि, कृपया मैन्युअल रूप से श्रेणी चुनें' 
-                : 'Image analysis failed, please select categories manually'
+                ? 'कुछ सामान्य समस्या श्रेणियां दिखाई जा रही हैं। कृपया अपनी समस्या के अनुसार चुनें।' 
+                : 'Showing some common problem categories. Please select according to your issue.'
             );
-            // Fallback to showing all predefined categories
-            setBackendCategories([]);
           } finally {
             setIsAnalyzingImage(false);
           }
@@ -509,7 +553,7 @@ export default function MobileDashboard({ user, onSubmitReport, onViewHistory, o
                 />
 
                 {/* Category Selection */}
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <Label className="text-sm font-medium">
                     {language === 'hindi' ? 'समस्या का प्रकार चुनें' : 'Select Problem Categories'}
                     {isAnalyzingImage && (
@@ -524,30 +568,49 @@ export default function MobileDashboard({ user, onSubmitReport, onViewHistory, o
                     <div className="p-3 border border-gray-200 rounded-lg bg-gray-50">
                       <p className="text-xs text-gray-600 text-center">
                         {language === 'hindi' 
-                          ? '📸 कृपया पहले तस्वीर अपलोड करें - समस्या श्रेणियां तस्वीर के आधार पर दिखाई जाएंगी' 
-                          : '📸 Please upload an image first - problem categories will be shown based on your image'}
+                          ? '📸 कृपया तस्वीर अपलोड करें - समस्या श्रेणियां AI द्वारा पहचानी जाएंगी' 
+                          : '📸 Please upload an image - problem categories will be identified by AI'}
                       </p>
                     </div>
                   )}
                   
-                  {/* Show backend categories if available */}
+                  {/* Show AI-detected categories if available */}
                   {imageFile && backendCategories.length > 0 && (
-                    <div className="grid grid-cols-2 gap-2">
-                      {backendCategories.map((category) => (
-                        <button
-                          key={category}
-                          type="button"
-                          onClick={() => handleCategoryToggle(category)}
-                          className={`p-2 rounded-lg border-2 text-xs font-medium transition-all duration-200 hover:shadow-md ${
-                            selectedCategories.includes(category)
-                              ? 'border-green-500 bg-green-50 text-green-700 shadow-md'
-                              : 'border-gray-200 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50'
-                          }`}
-                          disabled={isAnalyzingImage}
-                        >
-                          {category}
-                        </button>
-                      ))}
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <h4 className="text-xs font-medium text-blue-700">
+                          {language === 'hindi' ? 'AI सुझाव' : 'AI Suggestions'}
+                        </h4>
+                        <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
+                          ✨ AI
+                        </span>
+                        {selectedCategories.length > 0 && (
+                          <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full">
+                            {selectedCategories.length} {language === 'hindi' ? 'चयनित' : 'selected'}
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        {backendCategories.map((category) => (
+                          <button
+                            key={`ai-${category}`}
+                            type="button"
+                            onClick={() => handleCategoryToggle(category)}
+                            className={`p-2 rounded-lg border-2 text-xs font-medium transition-all duration-200 hover:shadow-md ${
+                              selectedCategories.includes(category)
+                                ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-md'
+                                : 'border-blue-200 bg-blue-25 text-blue-700 hover:border-blue-400 hover:bg-blue-50'
+                            }`}
+                            disabled={isAnalyzingImage}
+                          >
+                            <span className="flex items-center space-x-1">
+                              <span>✨</span>
+                              <span className="truncate">{category}</span>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                   
@@ -561,6 +624,15 @@ export default function MobileDashboard({ user, onSubmitReport, onViewHistory, o
                       </p>
                     </div>
                   )}
+                  
+                  {/* Instructions */}
+                  <div className="p-2 border border-blue-200 rounded-lg bg-blue-50">
+                    <p className="text-xs text-blue-700 text-center">
+                      {language === 'hindi' 
+                        ? '💡 तस्वीर अपलोड करके AI से समस्या श्रेणियों के सुझाव प्राप्त करें' 
+                        : '💡 Upload an image to get AI suggestions for problem categories'}
+                    </p>
+                  </div>
                 </div>
 
                 {/* Priority Selection */}

@@ -20,7 +20,7 @@ import AdminAnalytics from './components/AdminAnalyticsRobust';
 import AdminNotifications from './components/EnhancedAdminNotifications';
 import { api, getAuthToken, removeAuthToken } from './utils/api';
 import AdminSettings from './components/EnhancedAdminSettings';
-import FieldWorkerDashboard from './components/EnhancedFieldWorkerDashboard';
+import FieldWorkerDashboard from './components/FieldWorkerDashboard';
 import FieldWorkerNotifications from './components/FieldWorkerNotifications';
 import FieldWorkerProfile from './components/FieldWorkerProfile';
 import DepartmentHeadDashboard from './components/DepartmentHeadDashboard';
@@ -1117,13 +1117,13 @@ export default function App() {
           >
             <SafeComponent language={language}>
               <div className="w-full min-h-screen px-4 sm:px-6 lg:px-8">
-                <LoginPage 
-                  onLogin={handleLogin}
-                  onSwitchToRegister={() => setCurrentPage('register')}
-                  onSwitchToAdminLogin={() => setCurrentPage('admin-login')}
-                  language={language}
-                  onLanguageChange={setLanguage}
-                />
+        <LoginPage 
+          onLogin={handleLogin}
+          onSwitchToRegister={() => setCurrentPage('register')}
+          onSwitchToAdminLogin={() => setCurrentPage('admin-login')}
+          language={language}
+          onLanguageChange={setLanguage}
+        />
               </div>
             </SafeComponent>
           </motion.div>
@@ -1470,6 +1470,7 @@ export default function App() {
             />
           </motion.div>
         )}
+
 
         {currentPage === 'field-worker-dashboard' && user && user.role === 'field-worker' && (
           <motion.div

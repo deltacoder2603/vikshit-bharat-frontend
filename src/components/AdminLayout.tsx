@@ -33,7 +33,7 @@ export default function AdminLayout({
   onLanguageChange,
   children
 }: AdminLayoutProps) {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [searchTerm, setSearchTerm] = useState('');
@@ -88,7 +88,9 @@ export default function AdminLayout({
 
   const navigationItems = useMemo(() => [
     {
-      id: 'admin-dashboard',
+      id: user.role === 'district-magistrate' ? 'admin-dashboard' : 
+          user.role === 'department-head' ? 'department-head-dashboard' : 
+          user.role === 'field-worker' ? 'field-worker-dashboard' : 'admin-dashboard',
       label: language === 'hindi' ? 'डैशबोर्ड' : 'Dashboard',
       icon: LayoutDashboard,
       color: 'text-blue-600',

@@ -63,7 +63,9 @@ export default function AdminSidebar({
 
   const navigationItems = [
     {
-      id: 'admin-dashboard',
+      id: user.role === 'district-magistrate' ? 'admin-dashboard' : 
+          user.role === 'department-head' ? 'department-head-dashboard' : 
+          user.role === 'field-worker' ? 'field-worker-dashboard' : 'admin-dashboard',
       label: language === 'hindi' ? 'डैशबोर्ड' : 'Dashboard',
       icon: LayoutDashboard,
       color: 'text-blue-600',

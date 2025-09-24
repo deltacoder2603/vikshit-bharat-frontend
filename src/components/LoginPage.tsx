@@ -325,7 +325,7 @@ export default function LoginPage({ onLogin, onSwitchToRegister, onSwitchToAdmin
                   </button>
                 </div>
                 
-                <div className="text-center">
+                <div className="text-center space-y-2">
                   <button
                     type="button"
                     onClick={onSwitchToAdminLogin}
